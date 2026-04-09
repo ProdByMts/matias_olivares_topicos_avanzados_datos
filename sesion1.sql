@@ -43,9 +43,12 @@ INSERT INTO Pedidos VALUES (103, 2, 800, TO_DATE('2025-03-03', 'YYYY-MM-DD'));
 
 INSERT INTO Productos VALUES (1, 'Laptop', 1200);
 INSERT INTO Productos VALUES (2, 'Mouse', 25);
+INSERT INTO Productos VALUES (3, 'Iphone', 400);
 
 INSERT INTO DetallesPedidos VALUES (1, 101, 1, 2); 
 INSERT INTO DetallesPedidos VALUES (2, 101, 2, 5); 
+INSERT INTO DetallesPedidos VALUES (3, 101, 3, 29); 
+INSERT INTO DetallesPedidos VALUES (4, 101, 1, 100); 
 
 -- 4. Guardamos los cambios
 COMMIT;
