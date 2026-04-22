@@ -1,0 +1,167 @@
+-- Activar la salida por consola
+SET SERVEROUTPUT ON;
+
+
+  PARTE 1: TEÓRICA (40 PUNTOS)
+
+
+-- Pregunta 1: Vistas (10 pts)
+
+¿Qué es una vista y cómo la usarías?
+Una vista es una tabla virtual basada en el resultado de una consulta SQL (SELECT). 
+No almacena datos físicamente, sino que guarda la consulta. La usaría para simplificar 
+consultas complejas (como JOINs o agrupaciones) o para restringir el acceso a ciertos 
+datos sensibles, mostrando solo lo necesario.
+
+-- Consulta SQL para crear la vista solicitada:
+CREATE OR REPLACE VIEW vista_horas_incidente AS
+SELECT 
+    i.descripcion, 
+    i.severidad, 
+    SUM(a.horas) AS total_horas
+FROM Incidentes i
+JOIN Asignaciones a ON i.incidente_id = a.incidente_id
+GROUP BY i.descripcion, i.severidad;
+
+
+-- Pregunta 2: Excepciones Predefinidas (10 pts)
+
+¿Qué es una excepción predefinida en PL/SQL y cómo se maneja?
+Es un error común de Oracle que ya tiene un nombre asignado por el sistema (ej. NO_DATA_FOUND, 
+ZERO_DIVIDE). Se manejan en el bloque EXCEPTION de PL/SQL usando la cláusula WHEN nombre_excepcion THEN.
+
+-- Ejemplo de NO_DATA_FOUND:
+DECLARE
+    v_desc Incidentes.descripcion%TYPE;
+BEGIN
+    SELECT descripcion INTO v_desc FROM Incidentes WHERE incidente_id = 9999; -- ID que no existe
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        DBMS_OUTPUT.PUT_LINE('Error: El incidente buscado no existe.');
+END;
+/
+
+
+-- Pregunta 3: Cursores Explícitos (10 pts)
+
+¿Qué es un cursor explícito y cómo se usa?
+Es un área de memoria nombrada que el programador controla manualmente para procesar 
+consultas (SELECT) que devuelven múltiples filas. Se usa declarándolo (CURSOR), 
+abriéndolo (OPEN), leyendo fila por fila (FETCH) y cerrándolo (CLOSE).
+
+Dos atributos de cursor:
+1. %NOTFOUND: Devuelve TRUE si el último FETCH no encontró ninguna fila. Útil para salir de ciclos.
+2. %ROWCOUNT: Devuelve el número de filas que el cursor ha extraído hasta el momento.
+
+
+
+
+  PARTE 2: PRÁCTICA (60 PUNTOS)
+
+
+-- Ejercicio 1: Cursor Explícito con Promedio (20 pts)
+DECLARE
+    CURSOR c_especialidades IS
+        SELECT ag.especialidad, AVG(asi.horas) as promedio_horas
+        FROM Agentes ag
+        JOIN Asignaciones asi ON ag.agente_id = asi.agente_id
+        GROUP BY ag.especialidad
+        HAVING AVG(asi.horas) > 30;
+        
+    v_especialidad Agentes.especialidad%TYPE;
+    v_promedio NUMBER;
+BEGIN
+    OPEN c_especialidades;
+    LOOP
+        FETCH c_especialidades INTO v_especialidad, v_promedio;
+        EXIT WHEN c_especialidades%NOTFOUND;
+        
+        DBMS_OUTPUT.PUT_LINE('Especialidad: ' || v_especialidad || ' | Promedio Horas: ' || ROUND(v_promedio, 2));
+    END LOOP;
+    CLOSE c_especialidades;
+END;
+/
+
+
+-- Ejercicio 2: Cursor Explícito con FOR UPDATE (20 pts)
+DECLARE
+    CURSOR c_asignaciones_criticas IS
+        SELECT a.horas
+        FROM Asignaciones a
+        JOIN Incidentes i ON a.incidente_id = i.incidente_id
+        WHERE i.severidad = 'Critical'
+        FOR UPDATE OF a.horas; -- Bloquea las filas para actualizar
+        
+    v_horas Asignaciones.horas%TYPE;
+BEGIN
+    OPEN c_asignaciones_criticas;
+    LOOP
+        FETCH c_asignaciones_criticas INTO v_horas;
+        EXIT WHEN c_asignaciones_criticas%NOTFOUND;
+        
+        -- Actualiza exactamente la fila donde está apuntando el cursor
+        UPDATE Asignaciones
+        SET horas = horas + 10
+        WHERE CURRENT OF c_asignaciones_criticas;
+    END LOOP;
+    CLOSE c_asignaciones_criticas;
+    
+    COMMIT; 
+    DBMS_OUTPUT.PUT_LINE('Se aumentaron 10 horas a los incidentes Critical de forma exitosa.');
+EXCEPTION
+    WHEN OTHERS THEN
+        ROLLBACK;
+        DBMS_OUTPUT.PUT_LINE('Error al actualizar: ' || SQLERRM);
+END;
+/
+
+
+-- Ejercicio 3: Tipo de Objeto y Transferencia de Datos (20 pts)
+
+-- 3.1 Crear la especificación del Tipo de Objeto
+CREATE OR REPLACE TYPE incidente_obj AS OBJECT (
+    incidente_id NUMBER,
+    descripcion VARCHAR2(200),
+    MEMBER FUNCTION get_reporte RETURN VARCHAR2
+);
+/
+
+-- 3.2 Crear el cuerpo (BODY) del Tipo de Objeto
+CREATE OR REPLACE TYPE BODY incidente_obj AS
+    MEMBER FUNCTION get_reporte RETURN VARCHAR2 IS
+    BEGIN
+        RETURN 'Reporte -> ID: ' || SELF.incidente_id || ' | Descripción: ' || SELF.descripcion;
+    END get_reporte;
+END;
+/
+
+-- 3.3 Crear la tabla basada en el Tipo de Objeto
+CREATE TABLE tabla_incidentes_obj OF incidente_obj;
+
+-- 3.4 Transferir los datos de la tabla relacional a la tabla de objetos
+BEGIN
+    INSERT INTO tabla_incidentes_obj
+    SELECT incidente_obj(incidente_id, descripcion) FROM Incidentes;
+    COMMIT;
+    DBMS_OUTPUT.PUT_LINE('Datos transferidos a la tabla de objetos correctamente.');
+END;
+/
+
+-- 3.5 Cursor explícito para listar usando el método get_reporte
+DECLARE
+ 
+    CURSOR c_objetos IS SELECT VALUE(t) FROM tabla_incidentes_obj t;
+    v_obj incidente_obj;
+BEGIN
+    DBMS_OUTPUT.PUT_LINE('--- LISTADO DE OBJETOS ---');
+    OPEN c_objetos;
+    LOOP
+        FETCH c_objetos INTO v_obj;
+        EXIT WHEN c_objetos%NOTFOUND;
+        
+    
+        DBMS_OUTPUT.PUT_LINE(v_obj.get_reporte());
+    END LOOP;
+    CLOSE c_objetos;
+END;
+/
