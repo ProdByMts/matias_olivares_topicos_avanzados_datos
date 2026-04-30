@@ -1,0 +1,47 @@
+--1. 
+
+DELIMITER //
+
+CREATE FUNCTION calcular_edad_empleado(p_empleado_id INT) 
+RETURNS INT
+READS SQL DATA
+BEGIN
+    DECLARE v_fecha_nacimiento DATETIME;
+    DECLARE v_edad INT;
+    DECLARE v_existe INT;
+
+    SELECT COUNT(*) INTO v_existe FROM Employee WHERE employeeId = p_empleado_id;
+    IF v_existe = 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Error: Empleado no encontrado.';
+    END IF;
+    SELECT birthDate INTO v_fecha_nacimiento
+    FROM Employee
+    WHERE employeeId = p_empleado_id;
+
+    SET v_edad = TIMESTAMPDIFF(YEAR, v_fecha_nacimiento, CURDATE());
+
+    RETURN v_edad;
+END //
+
+DELIMITER ;
+
+--2.
+
+DELIMITER //
+
+CREATE FUNCTION obtener_precio_promedio() 
+RETURNS DECIMAL(10,2)
+READS SQL DATA
+BEGIN
+    DECLARE v_promedio DECIMAL(10,2);
+    
+    -- Calculamos el promedio general de la columna unitPrice
+    SELECT AVG(unitPrice) INTO v_promedio
+    FROM Product;
+    
+    -- Si por alguna razón la tabla está vacía, evitamos retornar NULL devolviendo un 0
+    RETURN IFNULL(v_promedio, 0);
+END //
+
+DELIMITER ;
