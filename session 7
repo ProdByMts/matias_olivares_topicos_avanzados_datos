@@ -1,0 +1,40 @@
+-- 1.
+
+DELIMITER //
+
+CREATE PROCEDURE aumentar_precio_producto(
+    IN p_producto_id INT, 
+    IN p_porcentaje DECIMAL(5,2)
+)
+BEGIN
+    -- Actualizamos el precio sumando el porcentaje
+    UPDATE Product
+    SET unitPrice = unitPrice * (1 + (p_porcentaje / 100))
+    WHERE productId = p_producto_id;
+
+    -- Si ninguna fila fue afectada, lanzamos la excepción
+    IF ROW_COUNT() = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Error: Producto no encontrado en la base de datos.';
+    END IF;
+END //
+
+DELIMITER ;
+
+-- 2.
+
+DELIMITER //
+
+CREATE PROCEDURE contar_pedidos_cliente(
+    IN p_cliente_id INT, 
+    OUT p_cantidad INT
+)
+BEGIN
+    -- Contamos cuántos pedidos existen para el cliente indicado
+    SELECT COUNT(*)
+    INTO p_cantidad
+    FROM SalesOrder
+    WHERE custId = p_cliente_id;
+END //
+
+DELIMITER ;
