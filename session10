@@ -1,0 +1,74 @@
+--1. 
+
+DELIMITER //
+
+CREATE PROCEDURE actualizar_total_pedidos(
+    IN p_cliente_id INT, 
+    IN p_porcentaje DECIMAL(5,2)
+)
+BEGIN
+    -- Declaración de variables
+    DECLARE done INT DEFAULT FALSE;
+    DECLARE v_pedido_id INT;
+    DECLARE v_freight DECIMAL(10,2);
+    
+    DECLARE pedido_cursor CURSOR FOR 
+        SELECT orderId, freight FROM SalesOrder WHERE custId = p_cliente_id;
+        
+    DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+    IF p_porcentaje IS NULL THEN
+        SET p_porcentaje = 10.00;
+    END IF;
+    OPEN pedido_cursor;
+
+    read_loop: LOOP
+        FETCH pedido_cursor INTO v_pedido_id, v_freight;
+        IF done THEN
+            LEAVE read_loop;
+        END IF;
+        UPDATE SalesOrder 
+        SET freight = v_freight * (1 + (p_porcentaje / 100))
+        WHERE orderId = v_pedido_id;
+        
+    END LOOP;
+
+    CLOSE pedido_cursor;
+    
+    SELECT CONCAT('Se han actualizado los pedidos del cliente: ', p_cliente_id) AS Resultado;
+    
+END //
+
+DELIMITER ;
+
+--2.
+
+DELIMITER //
+
+CREATE PROCEDURE calcular_costo_detalle(
+    IN p_detalle_id INT, 
+    INOUT p_costo DECIMAL(10,2)
+)
+BEGIN
+    DECLARE v_precio DECIMAL(10,2);
+    DECLARE v_cantidad INT;
+
+    -- Manejador de excepciones
+    DECLARE EXIT HANDLER FOR NOT FOUND
+    BEGIN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Error: El detalle de pedido no existe.';
+    END;
+
+    -- JOIN entre OrderDetail y Product
+    SELECT p.unitPrice, d.quantity 
+    INTO v_precio, v_cantidad
+    FROM OrderDetail d
+    JOIN Product p ON d.productId = p.productId
+    WHERE d.orderDetailId = p_detalle_id;
+
+    -- Cálculo
+    SET p_costo = v_precio * v_cantidad;
+
+END //
+
+DELIMITER ;
