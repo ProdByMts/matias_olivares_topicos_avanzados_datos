@@ -1,0 +1,72 @@
+-- 1. 
+
+DELIMITER //
+
+CREATE FUNCTION calcular_total_con_descuento(p_pedido_id INT) 
+RETURNS DECIMAL(10,2)
+READS SQL DATA
+BEGIN
+    DECLARE v_total DECIMAL(10,2);
+    
+    SELECT freight INTO v_total
+    FROM SalesOrder
+    WHERE orderId = p_pedido_id;
+
+    IF v_total > 1000 THEN
+        SET v_total = v_total * 0.90; 
+    END IF;
+    
+    RETURN v_total;
+END //
+
+DELIMITER ;
+
+DELIMITER //
+
+CREATE PROCEDURE aplicar_descuento_pedido(IN p_pedido_id INT)
+BEGIN
+    DECLARE v_nuevo_total DECIMAL(10,2);
+    DECLARE v_existe INT;
+
+    SELECT COUNT(*) INTO v_existe FROM SalesOrder WHERE orderId = p_pedido_id;
+
+    IF v_existe = 0 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'Error: Pedido no encontrado.';
+    ELSE
+        SET v_nuevo_total = calcular_total_con_descuento(p_pedido_id);
+        
+        UPDATE SalesOrder
+        SET freight = v_nuevo_total
+        WHERE orderId = p_pedido_id;
+    END IF;
+END //
+
+DELIMITER ;
+
+-- 2.
+
+DELIMITER //
+
+CREATE TRIGGER validar_cantidad_detalle_insert
+BEFORE INSERT ON OrderDetail
+FOR EACH ROW
+BEGIN
+    IF NEW.quantity <= 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Error: La cantidad del detalle debe ser mayor a 0.';
+    END IF;
+END //
+
+CREATE TRIGGER validar_cantidad_detalle_update
+BEFORE UPDATE ON OrderDetail
+FOR EACH ROW
+BEGIN
+    IF NEW.quantity <= 0 THEN
+        SIGNAL SQLSTATE '45000' 
+        SET MESSAGE_TEXT = 'Error: La cantidad del detalle debe ser mayor a 0.';
+    END IF;
+END //
+
+DELIMITER ;
+
