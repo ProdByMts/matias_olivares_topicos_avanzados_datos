@@ -1,0 +1,54 @@
+-- ======================================================================
+-- EJERCICIO 1: Alternativa para Índices Compuestos
+-- ======================================================================
+
+
+CREATE INDEX idx_busqueda_rapida_detalles 
+ON DetallesPedidos(PedidoID, ProductoID);
+
+EXPLAIN PLAN FOR
+SELECT Cantidad, PrecioUnitario 
+FROM DetallesPedidos
+WHERE PedidoID = 108 AND ProductoID = 1;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+SELECT Cantidad, PrecioUnitario 
+FROM DetallesPedidos
+WHERE PedidoID = 108 AND ProductoID = 1;
+
+
+-- ======================================================================
+-- EJERCICIO 2: Tabla Particionada Hash
+-- ======================================================================
+
+CREATE TABLE Ventas_Historicas (
+    VentaID NUMBER PRIMARY KEY,
+    ClienteID NUMBER NOT NULL,
+    Total NUMBER,
+    FechaVenta DATE
+)
+PARTITION BY HASH (ClienteID)
+PARTITIONS 4;
+
+INSERT INTO Ventas_Historicas (VentaID, ClienteID, Total, FechaVenta)
+SELECT PedidoID, ClienteID, Total, FechaPedido
+FROM Pedidos;
+
+
+EXPLAIN PLAN FOR
+SELECT ClienteID, 
+       COUNT(VentaID) AS Cantidad_Transacciones,
+       SUM(Total) AS Monto_Facturado
+FROM Ventas_Historicas
+GROUP BY ClienteID;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+SELECT ClienteID, 
+       COUNT(VentaID) AS Cantidad_Transacciones,
+       SUM(Total) AS Monto_Facturado
+FROM Ventas_Historicas
+GROUP BY ClienteID;
+
+COMMIT;
