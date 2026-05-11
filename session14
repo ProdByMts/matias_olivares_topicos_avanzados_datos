@@ -1,16 +1,12 @@
 -- ======================================================================
 -- EJERCICIO 1: Supertipo Vehiculo y Subtipo Automovil
 -- ======================================================================
-
--- 1. Creación del Supertipo base (Vehiculo)
 CREATE OR REPLACE TYPE Vehiculo AS OBJECT (
     Marca VARCHAR2(50),
     Año NUMBER,
     MEMBER FUNCTION obtener_antiguedad RETURN NUMBER
 ) NOT FINAL;
 /
-
--- 2. Cuerpo del Supertipo
 CREATE OR REPLACE TYPE BODY Vehiculo AS
     MEMBER FUNCTION obtener_antiguedad RETURN NUMBER IS
     BEGIN
@@ -19,14 +15,12 @@ CREATE OR REPLACE TYPE BODY Vehiculo AS
 END;
 /
 
--- 3. Creación del Subtipo (Automovil)
 CREATE OR REPLACE TYPE Automovil UNDER Vehiculo (
     NumeroPuertas NUMBER,
     MEMBER FUNCTION descripcion RETURN VARCHAR2
 );
 /
 
--- 4. Cuerpo del Subtipo Automovil
 CREATE OR REPLACE TYPE BODY Automovil AS
     MEMBER FUNCTION descripcion RETURN VARCHAR2 IS
     BEGIN
@@ -35,7 +29,6 @@ CREATE OR REPLACE TYPE BODY Automovil AS
 END;
 /
 
--- 5. Crear tabla de objetos, insertar registro de prueba y consultar
 CREATE TABLE Vehiculos OF Vehiculo;
 
 INSERT INTO Vehiculos VALUES (Automovil('Toyota', 2020, 4));
@@ -51,14 +44,12 @@ WHERE VALUE(v) IS OF (Automovil);
 -- EJERCICIO 2: Subtipo Camion
 -- ======================================================================
 
--- 1. Creación del Subtipo Camion
 CREATE OR REPLACE TYPE Camion UNDER Vehiculo (
     CapacidadCarga NUMBER,
     OVERRIDING MEMBER FUNCTION obtener_antiguedad RETURN NUMBER
 );
 /
 
--- 2. Cuerpo del Subtipo Camion (sumando 2 años a la antigüedad)
 CREATE OR REPLACE TYPE BODY Camion AS
     OVERRIDING MEMBER FUNCTION obtener_antiguedad RETURN NUMBER IS
     BEGIN
@@ -66,8 +57,6 @@ CREATE OR REPLACE TYPE BODY Camion AS
     END;
 END;
 /
-
--- 3. Insertar un camión en la misma tabla Vehiculos y consultar
 INSERT INTO Vehiculos VALUES (Camion('Volvo', 2018, 10));
 
 SELECT v.Marca, 
