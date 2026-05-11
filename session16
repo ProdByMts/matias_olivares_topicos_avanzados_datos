@@ -1,0 +1,54 @@
+-- ======================================================================
+-- EJERCICIO 1: Optimización de JOINs y Agregaciones Pesadas
+-- ======================================================================
+
+EXPLAIN PLAN FOR
+SELECT cat.Nombre_Producto, SUM(det.Monto_Total) AS Ingresos_Generados
+FROM Catalogo_Prod cat, Facturacion_Detalle det
+WHERE cat.ID_Prod = det.ID_Prod
+GROUP BY cat.Nombre_Producto;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+
+
+CREATE INDEX idx_facturacion_producto ON Facturacion_Detalle(ID_Prod);
+
+
+EXPLAIN PLAN FOR
+SELECT /*+ INDEX(det idx_facturacion_producto) */ 
+       cat.Nombre_Producto, 
+       SUM(det.Monto_Total) AS Ingresos_Generados
+FROM Catalogo_Prod cat
+JOIN Facturacion_Detalle det ON cat.ID_Prod = det.ID_Prod
+GROUP BY cat.Nombre_Producto;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+
+-- ======================================================================
+-- EJERCICIOS 2: Optimización de Filtros y Conteo (Búsqueda por Ciudad)
+-- ======================================================================
+
+EXPLAIN PLAN FOR
+SELECT Pais, COUNT(ID_Cliente) AS Total_Nuevos_Clientes
+FROM Registro_Clientes
+WHERE Ciudad = 'SANTIAGO' 
+AND Fecha_Registro >= TO_DATE('2025-01-01', 'YYYY-MM-DD')
+GROUP BY Pais;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+CREATE INDEX idx_clientes_ciudad_fecha ON Registro_Clientes(Ciudad, Fecha_Registro);
+
+EXPLAIN PLAN FOR
+SELECT /*+ FIRST_ROWS(10) */ 
+       Pais, COUNT(ID_Cliente)
+FROM Registro_Clientes
+WHERE Ciudad = 'SANTIAGO'
+AND Fecha_Registro >= TO_DATE('2025-01-01', 'YYYY-MM-DD')
+GROUP BY Pais;
+
+SELECT * FROM TABLE(DBMS_XPLAN.DISPLAY);
+
+COMMIT;
