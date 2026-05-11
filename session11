@@ -1,47 +1,49 @@
---1. 
+-- ======================================================================
+-- ACTIVIDAD 1: Función para calcular la edad de un cliente
+-- ======================================================================
 
-DELIMITER //
-
-CREATE FUNCTION calcular_edad_empleado(p_empleado_id INT) 
-RETURNS INT
-READS SQL DATA
+CREATE OR REPLACE FUNCTION calcular_edad_cliente (
+    p_id_cli IN NUMBER
+) RETURN NUMBER AS
+    v_fecha_nac DATE;
+    v_anios NUMBER;
 BEGIN
-    DECLARE v_fecha_nacimiento DATETIME;
-    DECLARE v_edad INT;
-    DECLARE v_existe INT;
+    SELECT FechaNacimiento INTO v_fecha_nac
+    FROM Clientes
+    WHERE ClienteID = p_id_cli;
 
-    SELECT COUNT(*) INTO v_existe FROM Employee WHERE employeeId = p_empleado_id;
-    IF v_existe = 0 THEN
-        SIGNAL SQLSTATE '45000' 
-        SET MESSAGE_TEXT = 'Error: Empleado no encontrado.';
-    END IF;
-    SELECT birthDate INTO v_fecha_nacimiento
-    FROM Employee
-    WHERE employeeId = p_empleado_id;
+    v_anios := TRUNC(MONTHS_BETWEEN(SYSDATE, v_fecha_nac) / 12);
 
-    SET v_edad = TIMESTAMPDIFF(YEAR, v_fecha_nacimiento, CURDATE());
+    RETURN v_anios;
 
-    RETURN v_edad;
-END //
+EXCEPTION
 
-DELIMITER ;
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20005, 'El Cliente con ID ' || p_id_cli || ' no existe.');
+END;
+/
 
---2.
+SELECT Nombre, calcular_edad_cliente(ClienteID) AS Edad_Actual
+FROM Clientes;
 
-DELIMITER //
 
-CREATE FUNCTION obtener_precio_promedio() 
-RETURNS DECIMAL(10,2)
-READS SQL DATA
+-- ======================================================================
+-- ACTIVIDAD 2: Función de agregación y uso en SQL
+-- ======================================================================
+
+CREATE OR REPLACE FUNCTION obtener_precio_promedio 
+RETURN NUMBER AS
+    v_promedio NUMBER;
 BEGIN
-    DECLARE v_promedio DECIMAL(10,2);
-    
-    -- Calculamos el promedio general de la columna unitPrice
-    SELECT AVG(unitPrice) INTO v_promedio
-    FROM Product;
-    
-    -- Si por alguna razón la tabla está vacía, evitamos retornar NULL devolviendo un 0
-    RETURN IFNULL(v_promedio, 0);
-END //
+    SELECT AVG(Precio) INTO v_promedio 
+    FROM Productos;
+    RETURN ROUND(v_promedio, 2);
+END;
+/
 
-DELIMITER ;
+SELECT ProductoID, Nombre, Precio
+FROM Productos
+WHERE Precio > obtener_precio_promedio()
+ORDER BY Precio DESC;
+
+COMMIT;
