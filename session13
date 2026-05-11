@@ -1,7 +1,8 @@
-Ejercicio 1.
+-- ======================================================================
+-- EJERCICIO 1
+-- ======================================================================
 
 CREATE OR REPLACE PROCEDURE actualizar_inventario_pedido(p_pedido_id IN NUMBER) AS
-    -- Declaración del cursor
     CURSOR detalle_cursor IS
         SELECT ProductoID, Cantidad
         FROM DetallesPedidos
@@ -9,23 +10,18 @@ CREATE OR REPLACE PROCEDURE actualizar_inventario_pedido(p_pedido_id IN NUMBER) 
         
     v_cantidad_actual NUMBER;
 BEGIN
-    -- Ciclo FOR implícito para recorrer el cursor
     FOR detalle IN detalle_cursor LOOP
     
-        -- Verificar cantidad disponible en inventario
         SELECT Cantidad INTO v_cantidad_actual
         FROM Inventario
         WHERE ProductoID = detalle.ProductoID;
         
-        -- Crear el SAVEPOINT antes de modificar
         SAVEPOINT antes_reducir;
         
-        -- Lógica de validación
         IF v_cantidad_actual < detalle.Cantidad THEN
             RAISE_APPLICATION_ERROR(-20001, 'No hay suficiente inventario para el producto ' || detalle.ProductoID);
         END IF;
         
-        -- Actualizar el inventario
         UPDATE Inventario
         SET Cantidad = Cantidad - detalle.Cantidad
         WHERE ProductoID = detalle.ProductoID;
@@ -34,11 +30,9 @@ BEGIN
         
     END LOOP;
     
-    -- Confirmar la transacción si todo sale bien
     COMMIT;
     
 EXCEPTION
-    -- Manejo de errores exacto al de la PPT
     WHEN NO_DATA_FOUND THEN
         DBMS_OUTPUT.PUT_LINE('Error: Producto no encontrado en inventario.');
         ROLLBACK;
@@ -48,9 +42,10 @@ EXCEPTION
         COMMIT;
 END;
 /
-Ejercicio 2.
+-- ======================================================================
+-- EJERCICIO 2
+-- ======================================================================
 
--- Dimensión Ciudad[cite: 6]
 CREATE TABLE Dim_Ciudad (
 	CiudadID NUMBER PRIMARY KEY,
 	Ciudad VARCHAR2(50)
@@ -60,7 +55,6 @@ INSERT INTO Dim_Ciudad (CiudadID, Ciudad)
 SELECT ROWNUM, Ciudad
 FROM (SELECT DISTINCT Ciudad FROM Clientes);[cite: 6]
 
--- Tabla de hechos (usando las dimensiones ya creadas)[cite: 6]
 CREATE TABLE Fact_Pedidos (
 	PedidoID NUMBER,
 	ClienteID NUMBER,
@@ -79,7 +73,6 @@ JOIN Clientes c ON p.ClienteID = c.ClienteID
 JOIN Dim_Ciudad dc ON c.Ciudad = dc.Ciudad
 JOIN Dim_Tiempo dt ON p.FechaPedido = dt.Fecha;[cite: 6]
 
--- Consulta analítica[cite: 6]
 SELECT dc.Ciudad, dt.Año, SUM(fp.Total) AS TotalVentas
 FROM Fact_Pedidos fp
 JOIN Dim_Ciudad dc ON fp.CiudadID = dc.CiudadID
