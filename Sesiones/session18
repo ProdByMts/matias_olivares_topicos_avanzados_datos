@@ -1,0 +1,91 @@
+SET SERVEROUTPUT ON;
+
+-- ======================================================================
+-- ACTIVIDAD 1: ESPECIFICACIÓN DEL PAQUETE
+-- ======================================================================
+
+CREATE OR REPLACE PACKAGE pkg_gestion_pedidos AS
+    g_contador_pedidos NUMBER := 0;
+    e_monto_invalido EXCEPTION;
+
+    PROCEDURE registrar_pedido(
+        p_pedido_id  IN NUMBER,
+        p_cliente_id IN NUMBER,
+        p_total      IN NUMBER,
+        p_fecha      IN DATE
+    );
+
+    FUNCTION obtener_total_por_cliente(
+        p_cliente_id IN NUMBER
+    ) RETURN NUMBER;
+END pkg_gestion_pedidos;
+/
+
+
+-- ======================================================================
+-- ACTIVIDAD 2: CUERPO DEL PAQUETE
+-- ======================================================================
+
+CREATE OR REPLACE PACKAGE BODY pkg_gestion_pedidos AS
+
+    PROCEDURE registrar_pedido(
+        p_pedido_id  IN NUMBER,
+        p_cliente_id IN NUMBER,
+        p_total      IN NUMBER,
+        p_fecha      IN DATE
+    ) IS
+    BEGIN
+        IF p_total <= 0 THEN
+            RAISE e_monto_invalido;
+        END IF;
+
+        INSERT INTO Pedidos (PedidoID, ClienteID, Total, FechaPedido)
+        VALUES (p_pedido_id, p_cliente_id, p_total, p_fecha);
+
+        g_contador_pedidos := g_contador_pedidos + 1;
+        DBMS_OUTPUT.PUT_LINE('Pedido registrado con éxito. Total en sesión: ' || g_contador_pedidos);
+    EXCEPTION
+        WHEN e_monto_invalido THEN
+            DBMS_OUTPUT.PUT_LINE('Error de Validación: El monto debe ser mayor a cero.');
+            RAISE;
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('Error crítico: ' || SQLERRM);
+            RAISE;
+    END registrar_pedido;
+
+    FUNCTION obtener_total_por_cliente(
+        p_cliente_id IN NUMBER
+    ) RETURN NUMBER IS
+        v_total_acumulado NUMBER := 0;
+    BEGIN
+        SELECT NVL(SUM(Total), 0)
+        INTO v_total_acumulado
+        FROM Pedidos
+        WHERE ClienteID = p_cliente_id;
+
+        RETURN v_total_acumulado;
+    EXCEPTION
+        WHEN NO_DATA_FOUND THEN
+            RETURN 0;
+        WHEN OTHERS THEN
+            RETURN 0;
+    END obtener_total_por_cliente;
+
+END pkg_gestion_pedidos;
+/
+
+
+-- ======================================================================
+-- BLOQUE DE PRUEBA
+-- ======================================================================
+
+DECLARE
+    v_historico NUMBER;
+BEGIN
+    pkg_gestion_pedidos.registrar_pedido(9901, 1, 2500, SYSDATE);
+    
+    v_historico := pkg_gestion_pedidos.obtener_total_por_cliente(1);
+    DBMS_OUTPUT.PUT_LINE('Historial acumulado del Cliente 1: $' || v_historico);
+END;
+/
+
