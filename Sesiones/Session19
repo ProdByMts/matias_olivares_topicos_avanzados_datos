@@ -1,0 +1,65 @@
+-- ======================================================================
+-- ACTIVIDAD 1: CREACIÓN DE UNA ESTRATEGIA DE RESPALDO (SCRIPTS RMAN)
+-- ======================================================================
+-- Estrategia de Respaldo:
+-- - Respaldo completo: Cada sábado a las 22:00
+-- - Respaldo incremental (nivel 1): De lunes a viernes a las 22:00
+-- - Retención: Mantener respaldos de las últimas 3 semanas (21 días)
+-- - Ubicación: Disco local (/u02/backup_oracle) y copia en la nube
+
+-- Conectarse a RMAN (Ejecutar en la Terminal del Sistema Operativo)
+rman target /
+
+-- Configurar ventana de retención y formato de ruta para los archivos
+CONFIGURE RETENTION POLICY TO RECOVERY WINDOW OF 21 DAYS;
+CONFIGURE CHANNEL DEVICE TYPE DISK FORMAT '/u02/backup_oracle/%U';
+
+-- Script RMAN para respaldo completo semanal
+RUN {
+    BACKUP DATABASE PLUS ARCHIVELOG;
+    DELETE OBSOLETE;
+}
+
+-- Script RMAN para respaldo incremental diario
+RUN {
+    BACKUP INCREMENTAL LEVEL 1 DATABASE;
+    BACKUP ARCHIVELOG ALL;
+}
+
+-- Verificar los respaldos creados
+LIST BACKUP;
+
+
+-- ======================================================================
+-- ACTIVIDAD 2: SIMULACIÓN DE FALLO Y RECUPERACIÓN
+-- ======================================================================
+
+-- 1. Simular fallo (Ejecutar en Oracle SQL Developer)
+DROP TABLE DetallesPedidos;
+
+-- Verificar error
+SELECT COUNT(*) FROM DetallesPedidos; -- Error: tabla o vista no existe
+
+
+-- 2. Recuperar con Flashback (Ejecutar en Oracle SQL Developer si está habilitado)
+FLASHBACK TABLE DetallesPedidos TO BEFORE DROP;
+
+-- Verificar recuperación
+SELECT COUNT(*) FROM DetallesPedidos;
+
+
+-- 3. Si Flashback no está habilitado, recuperar con RMAN (Ejecutar en Terminal)
+rman target /
+
+-- Cambiar el estado de la base de datos a modo MOUNT
+SHUTDOWN IMMEDIATE;
+STARTUP MOUNT;
+
+-- Ejecutar restauración y recuperación de la tabla
+RUN {
+    RESTORE TABLE curso_topicos.DetallesPedidos;
+    RECOVER TABLE curso_topicos.DetallesPedidos;
+}
+
+-- Abrir la base de datos
+ALTER DATABASE OPEN;
