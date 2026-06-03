@@ -1,0 +1,17 @@
+-- ============================================================================
+-- ACTIVIDAD PRÁCTICA: CONSULTA DE SOLO LECTURA PARA NODO STANDBY
+-- ============================================================================
+-- Esta es la consulta analítica pesada que enviaríamos al nodo secundario 
+
+SELECT 
+    c.ClienteID, 
+    c.Nombre AS Nombre_Cliente, 
+    COUNT(p.PedidoID) AS Cantidad_Pedidos,
+    SUM(p.Total) AS Monto_Total_Comprado
+FROM Clientes c
+JOIN Pedidos p ON c.ClienteID = p.ClienteID
+-- Filtramos para obtener un reporte anual
+WHERE p.FechaPedido >= TO_DATE('2025-01-01', 'YYYY-MM-DD') 
+  AND p.FechaPedido <= TO_DATE('2025-12-31', 'YYYY-MM-DD')
+GROUP BY c.ClienteID, c.Nombre
+ORDER BY Monto_Total_Comprado DESC;
