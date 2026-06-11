@@ -1,0 +1,297 @@
+-- TEORIA -- 
+
+
+Pregunta 1 (10 pts): Explica la diferencia entre un procedimiento almacenado y una función 
+almacenada en PL/SQL. Luego, dado el siguiente código, indica si es un procedimiento o una 
+función y explica qué hace paso a paso:
+
+--diferencia entre un procedimiento almacenado y una función almacenada en PL/SQL:
+
+-- Un procedimiento almacenado es un bloque de código PL/SQL que realiza una tarea específica y no devuelve un valor.
+--Una función almacenada, por otro lado, es un bloque de código PL/SQL que realiza una tarea específica y devuelve un valor.
+
+CREATE OR REPLACE PROCEDURE obtener_agente_lider(p_incidente_id IN NUMBER, v_nombre OUT VARCHAR2) AS
+BEGIN
+    SELECT a.Nombre INTO v_nombre  -- leer desde la tabla anterior de agentes y asigna dentro del nombre de la consulta nueva que acabamos de crear
+    FROM Agentes a -- tabla de agentes en la cual buscamos el nombre del agente
+    JOIN Asignaciones asi ON a.AgenteID = asi.AgenteID -- se unifica la lista de Asignaciones con la de Agentes para obtener el nombre del agente que esta asignado a un incidente especifico, en este caso, el id del incidente es un parametro de entrada para la funcion
+    WHERE asi.IncidenteID = p_incidente_id AND asi.Rol = 'Lider'; -- donde el id del incidente sea un requerimiento para buscar dentro de la tabla de asignaciones y el rol sea lider para obtener el nombre del agente que es lider del incidente
+    RETURN v_nombre; -- devuelve el nombre del agente con sus respectivos requerimientos, en este caso, el rol sea lider y el id del incidente sea el mismo que se le dio como parametro a la función
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN -- esta es la exception en la cual si no encuentra el dato en la tabla definida para buscar el nombre del agente, entonces se ejecuta el siguiente bloque de codigo
+        RETURN 'Sin líder asignado';
+END; -- final del  codigo
+
+-- El codigo es un procedimiento almacenado, ya que, no devuelve un valor, si no que, directamente entrega el resultado a través del parametro de salida v_nombre. 
+-- el procedimiento busca el nombre del agente que tiene el rol de 'Lider' para un incidente específico, identificado por p_incidente_id. 
+-- si no se encuentra ningún líder asignado para ese incidente, devuelve el mensaje 'Sin líder asignado'.
+
+Pregunta 2 (10 pts): Describe cómo usarías un parámetro IN OUT en un procedimiento almacenado.
+Escribe un procedimiento que reciba un AgenteID (IN) y un parámetro de horas (IN OUT). 
+El procedimiento debe:
+- Usar el valor IN OUT como cantidad de horas a agregar
+- Sumar esas horas a TODAS las asignaciones del agente (UPDATE múltiple)
+- Devolver en el mismo parámetro IN OUT el nuevo TOTAL de horas del agente (suma de todas sus asignaciones)
+
+-- Un parámetro IN OUT en un procedimiento almacenado se utiliza para pasar un valor al procedimiento y también para recibir un valor de vuelta. 
+-- Es decir, el mismo parámetro puede ser utilizado tanto para enviar información al procedimiento como para devolver resultados después de que el procedimiento haya realizado sus operaciones.
+
+CREATE OR REPLACE PROCEDURE actualizar_horas_agente(p_agente_id IN NUMBER, p_horas IN OUT NUMBER) AS
+    v_total_horas NUMBER; -- variable para almacenar el total de horas del agente
+BEGIN
+    -- Actualizar las horas de todas las asignaciones del agente sumando el valor de p_horas
+    UPDATE Asignaciones
+    SET Horas = Horas + p_horas
+    WHERE AgenteID = p_agente_id;
+    -- Calcular el nuevo total de horas del agente después de la actualización
+    SELECT SUM(Horas) INTO v_total_horas
+    FROM Asignaciones
+    WHERE AgenteID = p_agente_id;
+    -- Devolver el nuevo total de horas en el mismo parámetro IN OUT
+    p_horas := v_total_horas; -- asignar el nuevo total de horas al parámetro IN OUT
+EXCEPTION
+    WHEN OTHERS THEN
+        p_horas := -1; -- en caso de error, devolver -1 para indicar que hubo un problema
+END; -- final del procedimiento
+
+Pregunta 3 (10 pts): ¿Cómo se puede usar una función almacenada dentro de una consulta SQL? 
+Escribe una función que reciba un AgenteID y devuelva la cantidad de incidentes DISTINTOS 
+en los que participa ese agente. Luego úsala en una consulta que liste todos los agentes 
+que participan en más de 1 incidente, mostrando nombre, especialidad y cantidad de incidentes.
+
+-- Para usar una funcion almacenada dentro de una consulta, la función debe estar definida para devolver un valor que pueda ser utilizado en la consulta.
+
+CREATE OR REPLACE FUNCTION contar_incidentes_agente(p_agente_id IN NUMBER) RETURN NUMBER AS
+    v_cantidad_incidentes NUMBER; -- variable para almacenar la cantidad de incidentes distintos
+BEGIN
+    -- Contar la cantidad de incidentes distintos en los que participa el agente
+    SELECT COUNT(DISTINCT IncidenteID) INTO v_cantidad_incidentes
+    FROM Asignaciones
+    WHERE AgenteID = p_agente_id;
+    RETURN v_cantidad_incidentes; -- devolver la cantidad de incidentes
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN -1; -- en caso de error, devolver -1 para indicar que hubo un problema
+END; -- final de la función
+
+Pregunta 4 (10 pts): Explica qué es un trigger y menciona dos tipos de eventos que pueden 
+dispararlo. Escribe un trigger que se dispare ANTES de insertar una asignación en la tabla 
+Asignaciones y que valide lo siguiente:
+- Si el incidente tiene severidad 'Critical', solo agentes con especialidad 'Pentester' o 
+  'Forense Digital' pueden ser asignados.
+
+-- Si la validación falla, el trigger debe impedir la inserción con un mensaje de error.
+-- Un trigger es un bloque de código PL/SQL que se ejecuta automáticamente en respuesta a ciertos eventos en la base de datos, como inserciones, actualizaciones o eliminaciones.
+-- Dos tipos de eventos que pueden disparar un trigger son:
+-- 1. BEFORE UPDATE: se ejecuta antes de que se inserte un nuevo registro en una tabla.
+-- 2. AFTER UPDATE: se ejecuta despues de que se actualice un registro en una tabla.
+
+CREATE OR REPLACE TRIGGER validar_asignacion_critica
+BEFORE INSERT ON Asignaciones
+FOR EACH ROW
+DECLARE
+    v_severidad VARCHAR2(20); -- variable para almacenar la severidad del incidente
+    v_especialidad VARCHAR2(50); -- variable para almacenar la especialidad del agente
+BEGIN
+    -- Obtener la severidad del incidente asociado a la asignación
+    SELECT i.Severidad INTO v_severidad
+    FROM Incidentes i
+    WHERE i.IncidenteID = :NEW.IncidenteID;
+    -- Si la severidad es 'Critical', validar la especialidad del agente
+    IF v_severidad = 'Critical' THEN
+        SELECT a.Especialidad INTO v_especialidad
+        FROM Agentes a
+        WHERE a.AgenteID = :NEW.AgenteID;
+        IF v_especialidad NOT IN ('Pentester', 'Forense Digital') THEN
+            RAISE_APPLICATION_ERROR(-20001, 'Solo agentes con especialidad Pentester o  Forense Digital pueden ser asignados a incidentes críticos.'); -- mensaje de error si la validación falla
+        END IF;
+    END IF;
+EXCEPTION
+    WHEN NO_DATA_FOUND THEN
+        RAISE_APPLICATION_ERROR(-20002, 'Incidente o agente no encontrado.'); -- mensaje de error si no se encuentra el incidente o el agente
+END; -- final del trigger
+
+PARTE 2 - PRÁCTICA (60 puntos)
+
+Ejercicio 1 (20 pts): Escribe un procedimiento registrar_asignacion_multiple que reciba 
+un IncidenteID, una lista de AgenteIDs separados por coma (VARCHAR2, ej: '101,103,105'), 
+Horas y Rol (parámetros IN). El procedimiento debe:
+
+1. Parsear la lista de agentes y por cada uno:
+   a. Verificar que el agente existe.
+   b. Verificar que no esté ya asignado a ese incidente.
+   c. Insertar la asignación con el próximo AsignacionID disponible.
+2. Actualizar el estado del incidente a 'En Proceso' si estaba en 'Abierto'.
+3. Mostrar por pantalla cuántas asignaciones se registraron exitosamente y cuántas fallaron.
+4. Manejar excepciones generales. Si algún agente falla, los demás deben seguir procesándose
+   (no hacer ROLLBACK por un fallo individual).
+
+
+CREATE OR REPLACE PROCEDURE registrar_asignacion_multiple(
+    p_incidente_id IN NUMBER,
+    p_agente_ids IN VARCHAR2,
+    p_horas IN NUMBER,
+    p_rol IN VARCHAR2
+) AS
+    v_agente_id NUMBER; -- variable para almacenar el agente ID durante el parseo
+    v_asignacion_id NUMBER; -- variable para almacenar el próximo AsignacionID disponible
+    v_exitosas NUMBER := 0; -- contador de asignaciones exitosas
+    v_fallidas NUMBER := 0; -- contador de asignaciones fallidas
+BEGIN
+    -- Actualizar el estado del incidente a 'En Proceso' si estaba en 'Abierto'
+    UPDATE Incidentes
+    SET Estado = 'En Proceso'
+    WHERE IncidenteID = p_incidente_id AND Estado = 'Abierto';
+    -- Parsear la lista de agentes separados por coma
+    FOR i IN 1 .. REGEXP_COUNT(p_agente_ids, ',') + 1 LOOP
+        v_agente_id := TO_NUMBER(REGEXP_SUBSTR(p_agente_ids, '[^,]+', 1, i)); -- obtener el agente ID actual
+        BEGIN
+            -- Verificar que el agente existe
+            SELECT COUNT(*) INTO v_asignacion_id
+            FROM Agentes
+            WHERE AgenteID = v_agente_id;
+            IF v_asignacion_id = 0 THEN
+                RAISE_APPLICATION_ERROR(-20003, 'Agente con ID ' || v_agente_id || ' no existe.'); -- mensaje de error si el agente no existe
+            END IF;
+            -- Verificar que no esté ya asignado a ese incidente
+            SELECT COUNT(*) INTO v_asignacion_id
+            FROM Asignaciones
+            WHERE AgenteID = v_agente_id AND IncidenteID = p_incidente_id;
+            IF v_asignacion_id > 0 THEN
+                RAISE_APPLICATION_ERROR(-20004, 'Agente con ID ' || v_agente_id || ' ya está asignado al incidente ' || p_incidente_id || '.'); -- mensaje de error si el agente ya está asignado al incidente
+            END IF;
+            -- Insertar la asignación con el próximo AsignacionID disponible
+            SELECT NVL(MAX(AsignacionID), 0) + 1 INTO v_asignacion_id FROM Asignaciones; -- obtener el próximo AsignacionID disponible
+            INSERT INTO Asignaciones (AsignacionID, AgenteID, IncidenteID, Horas, Rol)
+            VALUES (v_asignacion_id, v_agente_id, p_incidente_id, p_horas, p_rol); -- insertar la nueva asignación
+            v_exitosas := v_exitosas + 1; -- incrementar el contador de asignaciones exitosas
+        EXCEPTION
+            WHEN OTHERS THEN
+                v_fallidas := v_fallidas + 1; -- incrementar el contador de asignaciones fallidas
+                DBMS_OUTPUT.PUT_LINE('Error al procesar agente ID ' || v_agente_id || ': ' || SQLERRM); -- mostrar mensaje de error específico para el agente que falló
+        END;
+    END LOOP;
+    -- Mostrar por pantalla cuántas asignaciones se registraron exitosamente y cuántas fallaron
+    DBMS_OUTPUT.PUT_LINE('Asignaciones exitosas: ' || v_exitosas);
+    DBMS_OUTPUT.PUT_LINE('Asignaciones fallidas: ' || v_fallidas);
+EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error general: ' || SQLERRM); -- manejar excepciones generales
+END; -- final del procedimiento
+
+Ejercicio 2 (20 pts): Escribe una función calcular_costo_incidente que reciba un IncidenteID 
+(parámetro IN) y devuelva el costo estimado del incidente calculado como:
+- Cada hora de un agente 'Pentester' cuesta 50000
+- Cada hora de un agente 'Analista SOC' cuesta 35000
+- Cada hora de un agente 'Forense Digital' cuesta 45000
+
+La función debe hacer JOIN entre Asignaciones y Agentes para obtener la especialidad 
+y calcular el costo total.
+
+Luego, escribe un procedimiento reporte_costos que use la función y muestre por pantalla 
+todos los incidentes con su descripción, severidad, total de horas y costo estimado.
+Ordena la salida de mayor a menor costo.
+
+CREATE OR REPLACE FUNCTION calcular_costo_incidente(p_incidente_id IN NUMBER) RETURN NUMBER IS
+    v_costo_total NUMBER := 0; -- variable para almacenar el costo total del incidente
+BEGIN
+    -- Calcular el costo total del incidente haciendo JOIN entre Asignaciones y Agentes
+    SELECT SUM(CASE 
+                WHEN a.Especialidad = 'Pentester' THEN asi.Horas * 50000
+                WHEN a.Especialidad = 'Analista SOC' THEN asi.Horas * 35000
+                WHEN a.Especialidad = 'Forense Digital' THEN asi.Horas * 45000
+                ELSE 0
+            END) INTO v_costo_total
+    FROM Asignaciones asi
+    JOIN Agentes a ON asi.AgenteID = a.AgenteID
+    WHERE asi.IncidenteID = p_incidente_id;
+    RETURN v_costo_total; -- devolver el costo total del incidente
+    EXCEPTION
+    WHEN OTHERS THEN
+        RETURN -1; -- en caso de error, devolver -1 para indicar que hubo un problema
+END;
+
+CREATE OR REPLACE PROCEDURE reporte_casos AS
+BEGIN
+    -- Mostrar por pantalla todos los incidentes con su descripción, severidad, total de horas y costo estimado
+    FOR rec IN (SELECT i.Descripcion, i.Severidad, 
+                       (SELECT SUM(Horas) FROM Asignaciones WHERE IncidenteID = i.IncidenteID) AS TotalHoras,
+                       calcular_costo_incidente(i.IncidenteID) AS CostoEstimado
+                FROM Incidentes i
+                ORDER BY CostoEstimado DESC) LOOP
+        DBMS_OUTPUT.PUT_LINE('Descripción: ' || rec.Descripcion || ', Severidad: ' || rec.Severidad || 
+                             ', Total Horas: ' || rec.TotalHoras || ', Costo Estimado: ' || rec.CostoEstimado); -- mostrar la información del incidente
+    END LOOP;
+    EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error al generar el reporte: ' || SQLERRM);
+END;
+
+Ejercicio 3 (20 pts): Implementa un sistema de auditoría manual usando un trigger.
+Primero crea una tabla AuditoriaAsignaciones con las columnas: AuditoriaID, AsignacionID, 
+AgenteID, IncidenteID, Horas, Accion ('INSERT', 'UPDATE' o 'DELETE'), CampoModificado 
+(VARCHAR2, indica qué campo cambió en caso de UPDATE, NULL para INSERT/DELETE), 
+ValorAnterior, ValorNuevo y FechaRegistro.
+
+Luego crea un trigger auditar_asignaciones que se dispare después de INSERT, UPDATE o 
+DELETE en la tabla Asignaciones. Para UPDATE, debe registrar específicamente qué campo 
+cambió (Horas o Rol) con su valor anterior y nuevo en registros separados.
+
+-- Crear tabla AuditoriaAsignaciones
+CREATE TABLE AuditoriaAsignaciones (
+    AuditoriaID NUMBER PRIMARY KEY,
+    AsignacionID NUMBER,
+    AgenteID NUMBER,
+    IncidenteID NUMBER,
+    Horas NUMBER,
+    Accion VARCHAR2(10),
+    CampoModificado VARCHAR2(20),
+    ValorAnterior VARCHAR2(50),
+    ValorNuevo VARCHAR2(50),
+    FechaRegistro DATE
+);
+
+--Crear trigger auditar_asignaciones
+CREATE OR REPLACE TRIGGER auditar_asignaciones
+AFTER INSERT OR UPDATE OR DELETE ON Asignaciones
+FOR EACH ROW
+DECLARE
+    v_accion VARCHAR2(10);
+    v_campo_modificado VARCHAR2(20);
+    v_valor_anterior VARCHAR2(50);
+    v_valor_nuevo VARCHAR2(50);
+    v_auditoria_id NUMBER;
+BEGIN
+    -- Determinar la acción realizada (INSERT, UPDATE o DELETE)
+    IF INSERTING THEN
+        v_accion := 'INSERT';
+        v_campo_modificado := NULL;
+        v_valor_anterior := NULL;
+        v_valor_nuevo := 'AgenteID: ' || :NEW.AgenteID || ', IncidenteID: ' || :NEW.IncidenteID || ', Horas: ' || :NEW.Horas || ', Rol: ' || :NEW.Rol;
+    ELSIF UPDATING THEN
+        v_accion := 'UPDATE';
+        IF :OLD.Horas != :NEW.Horas THEN
+            v_campo_modificado := 'Horas';
+            v_valor_anterior := TO_CHAR(:OLD.Horas);
+            v_valor_nuevo := TO_CHAR(:NEW.Horas);
+        ELSIF :OLD.Rol != :NEW.Rol THEN
+            v_campo_modificado := 'Rol';
+            v_valor_anterior := :OLD.Rol;
+            v_valor_nuevo := :NEW.Rol;
+        END IF;
+    ELSIF DELETING THEN
+        v_accion := 'DELETE';
+        v_campo_modificado := NULL;
+        v_valor_anterior := 'AgenteID: ' || :OLD.AgenteID || ', IncidenteID: ' || :OLD.IncidenteID || ', Horas: ' || :OLD.Horas || ', Rol: ' || :OLD.Rol;
+        v_valor_nuevo := NULL;
+    END IF;
+
+    -- Obtener el próximo AuditoriaID disponible
+    SELECT NVL(MAX(AuditoriaID), 0) + 1 INTO v_auditoria_id FROM AuditoriaAsignaciones;
+    -- Insertar el registro de auditoría
+    INSERT INTO AuditoriaAsignaciones (AuditoriaID, AsignacionID, AgenteID, IncidenteID, Horas, Accion, CampoModificado, ValorAnterior, ValorNuevo, FechaRegistro)
+    VALUES (v_auditoria_id, NVL(:NEW.AsignacionID, :OLD.AsignacionID), NVL(:NEW.AgenteID, :OLD.AgenteID), NVL(:NEW.IncidenteID, :OLD.IncidenteID), NVL(:NEW.Horas, :OLD.Horas), v_accion, v_campo_modificado, v_valor_anterior, v_valor_nuevo, SYSDATE);
+    EXCEPTION
+    WHEN OTHERS THEN
+        DBMS_OUTPUT.PUT_LINE('Error al registrar auditoria' // SQLERRM);
+END; -- final del trigger
